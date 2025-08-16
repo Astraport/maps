@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта потребления сахара в Европе</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson@3"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #map-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        #map-svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .country {
+            stroke: #fff;
+            stroke-width: 0.5;
+            transition: filter 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .country:hover {
+            filter: brightness(1.2);
+        }
+        .country-no-data {
+            fill: #cbd5e1; /* slate-300 */
+            stroke: #fff;
+            stroke-width: 0.5;
+        }
+        #tooltip {
+            position: absolute;
+            display: none;
+            background-color: rgba(17, 24, 39, 0.9);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            pointer-events: none;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            z-index: 1000;
+            transition: opacity 0.2s;
+        }
+        #legend {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            z-index: 500;
+        }
+        .legend-gradient {
+            width: 150px;
+            height: 20px;
+            background: linear-gradient(to right, hsl(120, 80%, 60%), hsl(60, 80%, 60%), hsl(0, 80%, 60%));
+            border-radius: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col items-center justify-center min-h-screen p-4 overflow-hidden">
+
+    <div class="w-full max-w-6xl text-center mb-6">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 dark:text-white">Потребление сахара в Европе</h1>
+        <p class="text-gray-600 dark:text-gray-300 mt-2">Ежедневное потребление на душу населения (в граммах). Нажмите на страну для деталей.</p>
+    </div>
+
+    <!-- Контейнер для карты -->
+    <div id="map-container" class="w-full h-[75vh] bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+        <svg id="map-svg"></svg>
+    </div>
+
+    <!-- Тултип -->
+    <div id="tooltip"></div>
+
+    <!-- Легенда -->
+    <div id="legend">
+        <h3 class="text-sm font-semibold mb-2 text-gray-800">Уровень потребления</h3>
+        <div class="legend-gradient"></div>
+        <div class="flex justify-between text-xs mt-1 text-gray-600">
+            <span id="legend-min">Низкий</span>
+            <span id="legend-max">Высокий</span>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            // --- ДАННЫЕ ---
+            // ISO 3166-1 alpha-3 коды стран
+            const sugarData = {
+                RUS: { name: 'Россия', value: 107 },
+                DEU: { name: 'Германия', value: 103 },
+                NLD: { name: 'Нидерланды', value: 103 },
+                BEL: { name: 'Бельгия', value: 95 },
+                IRL: { name: 'Ирландия', value: 97 },
+                GBR: { name: 'Великобритания', value: 93 },
+                POL: { name: 'Польша', value: 91 },
+                CHE: { name: 'Швейцария', value: 87 },
+                AUT: { name: 'Австрия', value: 85 },
+                SWE: { name: 'Швеция', value: 84 },
+                NOR: { name: 'Норвегия', value: 83 },
+                FIN: { name: 'Финляндия', value: 81 },
+                ESP: { name: 'Испания', value: 79 },
+                FRA: { name: 'Франция', value: 75 },
+                ITA: { name: 'Италия', value: 72 },
+                PRT: { name: 'Португалия', value: 70 },
+                GRC: { name: 'Греция', value: 68 },
+                UKR: { name: 'Украина', value: 65 },
+                ROU: { name: 'Румыния', value: 60 },
+                BLR: { name: 'Беларусь', value: 58 },
+                HUN: { name: 'Венгрия', value: 55 },
+                CZE: { name: 'Чехия', value: 52 },
+                DNK: { name: 'Дания', value: 50 },
+                LTU: { name: 'Литва', value: 48 },
+                LVA: { name: 'Латвия', value: 46 },
+                EST: { name: 'Эстония', value: 45 },
+                HRV: { name: 'Хорватия', value: 78 },
+                BGR: { name: 'Болгария', value: 77 },
+                SRB: { name: 'Сербия', value: 74 },
+                SVN: { name: 'Словения', value: 73 },
+                SVK: { name: 'Словакия', value: 69 },
+            };
+
+            const tooltip = document.getElementById('tooltip');
+            const legendMin = document.getElementById('legend-min');
+            const legendMax = document.getElementById('legend-max');
+
+            // --- НАСТРОЙКА КАРТЫ D3 ---
+            const container = document.getElementById('map-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            const svg = d3.select("#map-svg")
+                .attr("viewBox", `0 0 ${width} ${height}`)
+                .style("cursor", "grab");
+
+            const g = svg.append("g");
+            
+            // --- ЛОГИКА ОКРАШИВАНИЯ ---
+            const values = Object.values(sugarData).map(d => d.value);
+            const minValue = Math.min(...values);
+            const maxValue = Math.max(...values);
+
+            legendMin.textContent = `${minValue} г`;
+            legendMax.textContent = `${maxValue} г`;
+            
+            // Цветовая шкала от зеленого к красному
+            const colorScale = d3.scaleLinear()
+                .domain([minValue, (minValue + maxValue) / 2, maxValue])
+                .range(["hsl(120, 80%, 60%)", "hsl(60, 80%, 60%)", "hsl(0, 80%, 60%)"]);
+
+            // --- ЗАГРУЗКА И ОТРИСОВКА ГЕО-ДАННЫХ ---
+            // Используем TopoJSON мира и фильтруем по европейским странам
+            const world = await d3.json('https://unpkg.com/world-atlas@2.0.2/countries-110m.json');
+            const europeanCountryCodes = Object.keys(sugarData);
+            
+            // Список кодов стран для отображения на карте (включая те, для которых нет данных)
+            const europeanGeoCodes = [
+                'ALB', 'AND', 'AUT', 'BLR', 'BEL', 'BIH', 'BGR', 'HRV', 'CYP', 'CZE', 'DNK', 'EST', 
+                'FIN', 'FRA', 'DEU', 'GRC', 'HUN', 'ISL', 'IRL', 'ITA', 'LVA', 'LIE', 'LTU', 'LUX', 
+                'MKD', 'MLT', 'MDA', 'MCO', 'MNE', 'NLD', 'NOR', 'POL', 'PRT', 'ROU', 'RUS', 'SMR', 
+                'SRB', 'SVK', 'SVN', 'ESP', 'SWE', 'CHE', 'UKR', 'GBR', 'VAT'
+            ];
+
+            const countries = topojson.feature(world, world.objects.countries);
+            const europeanCountries = {
+                type: 'FeatureCollection',
+                features: countries.features.filter(d => europeanGeoCodes.includes(d.properties.iso_a3))
+            };
+
+            // Настраиваем проекцию карты, чтобы она красиво вписывалась в контейнер
+            const projection = d3.geoMercator()
+                .fitSize([width, height], europeanCountries)
+                .center([15, 54]); // Центрируем на Европе
+
+            const pathGenerator = d3.geoPath().projection(projection);
+
+            g.selectAll("path")
+                .data(europeanCountries.features)
+                .enter()
+                .append("path")
+                .attr("d", pathGenerator)
+                .attr("class", d => sugarData[d.properties.iso_a3] ? "country" : "country-no-data")
+                .attr("fill", d => {
+                    const data = sugarData[d.properties.iso_a3];
+                    return data ? colorScale(data.value) : '#cbd5e1';
+                })
+                .on("click", (event, d) => {
+                    const data = sugarData[d.properties.iso_a3];
+                    if (data) {
+                        tooltip.style.display = "block";
+                        tooltip.innerHTML = `<strong class="font-bold">${data.name}</strong><br>${data.value} г/день`;
+                    }
+                })
+                .on("mousemove", (event) => {
+                    // Позиционируем тултип рядом с курсором
+                    const [x, y] = d3.pointer(event, container);
+                    tooltip.style.left = `${x + 15}px`;
+                    tooltip.style.top = `${y + 15}px`;
+                })
+                .on("mouseout", () => {
+                    tooltip.style.display = "none";
+                });
+            
+            // Скрываем тултип при клике на фон
+            svg.on("click", (event) => {
+                 if (event.target.tagName === 'svg') {
+                    tooltip.style.display = 'none';
+                }
+            });
+
+            // --- МАСШТАБИРОВАНИЕ И ПЕРЕМЕЩЕНИЕ ---
+            const zoom = d3.zoom()
+                .scaleExtent([1, 8]) // Ограничение масштаба
+                .on("zoom", (event) => {
+                    g.attr("transform", event.transform);
+                });
+
+            svg.call(zoom);
+        });
+    </script>
+</body>
+</html>
