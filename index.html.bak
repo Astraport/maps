@@ -44,9 +44,41 @@
         .subtitle {
             text-align: center;
             color: #4a5568;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             font-size: clamp(0.9rem, 2.5vw, 1.2rem);
             font-style: italic;
+        }
+        
+        .controls {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        #data-selector {
+            padding: 10px 15px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 2px solid #e2e8f0;
+            background-color: #f7fafc;
+            color: #4a5568;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-chevron-down' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            background-size: 16px;
+        }
+
+        #data-selector:hover {
+            border-color: #667eea;
+        }
+
+        #data-selector:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.4);
         }
         
         .map-container {
@@ -297,6 +329,14 @@
     <div class="container">
         <h1 id="main-title"></h1>
         <p class="subtitle" id="subtitle"></p>
+
+        <div class="controls">
+            <select id="data-selector">
+                <option value="data.txt">Потребление сахара</option>
+                <option value="data2.txt">Потребление алкоголя</option>
+                <option value="data3.txt">Средний возраст</option>
+            </select>
+        </div>
         
         <div class="map-container">
             <div id="loading" class="loading">Загрузка карты...</div>
@@ -345,48 +385,28 @@
         let currentTransform = d3.zoomIdentity;
         let svg, g, projection, path, tooltip, zoom;
         let configData = {}; // To store loaded data from JSON
+        let worldGeoData; // To cache the map geometry
 
         // Function to get color based on value
         function getValueColor(value) {
             if (value === undefined || value === null) return '#e2e8f0';
             
-            const values = Object.values(configData.data);
+            const values = Object.values(configData.data).filter(v => v !== null);
             const minVal = Math.min(...values);
             const maxVal = Math.max(...values);
             
             const normalized = Math.max(0, Math.min(1, (value - minVal) / (maxVal - minVal)));
             
-            // This color scale is generic now
-            if (normalized <= 0.25) {
-                const factor = normalized * 4;
-                const r = Math.round(16 + (52 - 16) * factor);
-                const g = Math.round(185 + (211 - 185) * factor);
-                const b = Math.round(129 + (153 - 129) * factor);
-                return `rgb(${r}, ${g}, ${b})`;
-            } else if (normalized <= 0.5) {
-                const factor = (normalized - 0.25) * 4;
-                const r = Math.round(52 + (251 - 52) * factor);
-                const g = Math.round(211 + (191 - 211) * factor);
-                const b = Math.round(153 + (36 - 153) * factor);
-                return `rgb(${r}, ${g}, ${b})`;
-            } else if (normalized <= 0.75) {
-                const factor = (normalized - 0.5) * 4;
-                const r = Math.round(251 + (245 - 251) * factor);
-                const g = Math.round(191 + (158 - 191) * factor);
-                const b = Math.round(36 + (11 - 36) * factor);
-                return `rgb(${r}, ${g}, ${b})`;
-            } else {
-                const factor = (normalized - 0.75) * 4;
-                const r = Math.round(245 + (239 - 245) * factor);
-                const g = Math.round(158 + (68 - 158) * factor);
-                const b = Math.round(11 + (68 - 11) * factor);
-                return `rgb(${r}, ${g}, ${b})`;
-            }
+            const colorScale = d3.scaleLinear()
+                .domain([0, 0.25, 0.5, 0.75, 1])
+                .range(['#10b981', '#34d399', '#fbbf24', '#f59e0b', '#ef4444']);
+            
+            return colorScale(normalized);
         }
 
         // Generic category function
         function getValueCategory(value) {
-            const values = Object.values(configData.data);
+            const values = Object.values(configData.data).filter(v => v !== null);
             const maxVal = Math.max(...values);
             const minVal = Math.min(...values);
             const range = maxVal - minVal;
@@ -419,7 +439,6 @@
             });
         }
         
-        // Function to populate UI text from loaded data
         function populateUI() {
             document.title = configData.pageTitle;
             document.getElementById('main-title').textContent = configData.header;
@@ -440,86 +459,93 @@
             document.getElementById('total-label').textContent = configData.stats.totalLabel;
         }
 
-        async function loadAndRenderMap() {
+        function renderMap() {
+            svg = d3.select("#map");
+            svg.html(""); // Clear previous map content
+
+            const width = 1000;
+            const height = 700;
+            
+            projection = d3.geoMercator()
+                .center([20, 55])
+                .scale(800)
+                .translate([width / 2, height / 2]);
+            
+            path = d3.geoPath().projection(projection);
+            tooltip = d3.select("#tooltip");
+            g = svg.append('g');
+            
+            const europeanCountries = worldGeoData.features.filter(d => {
+                const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
+                return configData.data[name] !== undefined;
+            });
+            
+            g.selectAll(".country")
+                .data(europeanCountries)
+                .enter()
+                .append("path")
+                .attr("class", "country")
+                .attr("d", path)
+                .style("fill", d => {
+                    const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
+                    return getValueColor(configData.data[name]);
+                })
+                .on("mouseover", function(event, d) {
+                    const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
+                    const displayName = configData.countryNames[name] || name;
+                    const value = configData.data[name];
+                    
+                    if (value !== undefined) {
+                        tooltip.html(`
+                            <strong>${displayName}</strong><br>
+                            ${configData.tooltip.valueLabel}: <strong>${value}${configData.tooltip.valueSuffix}</strong><br>
+                            ${configData.tooltip.categoryLabel}: ${getValueCategory(value)}<br>
+                            <small style="opacity: 0.8;">${configData.tooltip.note}</small>
+                        `)
+                        .classed("show", true);
+                    }
+                })
+                .on("mousemove", function(event) {
+                    const [x, y] = d3.pointer(event, document.body);
+                    tooltip
+                        .style("left", Math.min(x + 15, window.innerWidth - 260) + "px")
+                        .style("top", Math.max(y - 15, 10) + "px");
+                })
+                .on("mouseout", () => tooltip.classed("show", false));
+            
+            setupZoom();
+            setupTouch();
+            calculateStats();
+        }
+
+        async function loadDataAndRedraw(fileName) {
+            document.getElementById('loading').style.display = 'block';
             try {
-                // Load configuration data first
-                const dataResponse = await fetch('data.txt');
+                // Load configuration data
+                const dataResponse = await fetch(fileName);
                 configData = await dataResponse.json();
                 
-                // Populate UI text elements
                 populateUI();
 
-                // Then load map geometry
-                const geoResponse = await fetch('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson');
-                const world = await geoResponse.json();
+                // Load map geometry if not already loaded
+                if (!worldGeoData) {
+                    const geoResponse = await fetch('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson');
+                    worldGeoData = await geoResponse.json();
+                }
                 
-                svg = d3.select("#map");
-                const width = 1000;
-                const height = 700;
-                
-                projection = d3.geoMercator()
-                    .center([20, 55])
-                    .scale(800)
-                    .translate([width / 2, height / 2]);
-                
-                path = d3.geoPath().projection(projection);
-                tooltip = d3.select("#tooltip");
-                g = svg.append('g');
-                
-                const europeanCountries = world.features.filter(d => {
-                    const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
-                    return configData.data[name] !== undefined;
-                });
-                
-                g.selectAll(".country")
-                    .data(europeanCountries)
-                    .enter()
-                    .append("path")
-                    .attr("class", "country")
-                    .attr("d", path)
-                    .style("fill", d => {
-                        const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
-                        return getValueColor(configData.data[name]);
-                    })
-                    .on("mouseover", function(event, d) {
-                        const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
-                        const displayName = configData.countryNames[name] || name;
-                        const value = configData.data[name];
-                        
-                        if (value !== undefined) {
-                            tooltip.html(`
-                                <strong>${displayName}</strong><br>
-                                ${configData.tooltip.valueLabel}: <strong>${value}${configData.tooltip.valueSuffix}</strong><br>
-                                ${configData.tooltip.categoryLabel}: ${getValueCategory(value)}<br>
-                                <small style="opacity: 0.8;">${configData.tooltip.note}</small>
-                            `)
-                            .classed("show", true);
-                        }
-                    })
-                    .on("mousemove", function(event) {
-                        const [x, y] = d3.pointer(event, document.body);
-                        tooltip
-                            .style("left", Math.min(x + 15, window.innerWidth - 260) + "px")
-                            .style("top", Math.max(y - 15, 10) + "px");
-                    })
-                    .on("mouseout", () => tooltip.classed("show", false));
-                
-                setupZoom();
-                setupTouch();
-                
-                document.getElementById('loading').style.display = 'none';
-                
-                calculateStats();
+                renderMap();
                 
             } catch (error) {
                 console.error('Ошибка загрузки данных или карты:', error);
-                document.getElementById('loading').innerHTML = 'Ошибка загрузки данных. Пожалуйста, проверьте файл data.txt и ваше интернет-соединение.';
+                document.getElementById('loading').innerHTML = `Ошибка загрузки ${fileName}.`;
+            } finally {
+                document.getElementById('loading').style.display = 'none';
             }
         }
 
         function calculateStats() {
-            const values = Object.values(configData.data);
-            const avg = Math.round(values.reduce((a, b) => a + b) / values.length);
+            const values = Object.values(configData.data).filter(v => typeof v === 'number');
+            const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
             
             const maxValue = Math.max(...values);
             const minValue = Math.min(...values);
@@ -530,10 +556,18 @@
             document.getElementById('avg-value').textContent = avg;
             document.getElementById('max-country').textContent = configData.countryNames[maxCountryName] || maxCountryName;
             document.getElementById('min-country').textContent = configData.countryNames[minCountryName] || minCountryName;
-            document.getElementById('total-countries').textContent = Object.keys(configData.data).length;
+            document.getElementById('total-countries').textContent = values.length;
         }
 
-        document.addEventListener('DOMContentLoaded', loadAndRenderMap);
+        document.addEventListener('DOMContentLoaded', () => {
+            const selector = document.getElementById('data-selector');
+            selector.addEventListener('change', (event) => {
+                loadDataAndRedraw(event.target.value);
+            });
+
+            // Initial load
+            loadDataAndRedraw(selector.value);
+        });
 
     </script>
 </body>
