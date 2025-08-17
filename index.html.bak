@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Потребление сахара в Европе</title>
+    <title>Интерактивная карта Европы</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
     <style>
@@ -275,70 +275,28 @@
         }
         
         @media (max-width: 768px) {
-            body {
-                padding: 5px;
-            }
-            
-            .container {
-                padding: 15px;
-                border-radius: 15px;
-            }
-            
-            .map-container {
-                margin-bottom: 20px;
-            }
-            
-            #map {
-                min-height: 300px;
-            }
-            
-            .legend {
-                gap: 15px;
-                margin: 20px 0;
-            }
-            
-            .stats {
-                gap: 10px;
-                margin-top: 20px;
-            }
-            
-            .stat-card {
-                padding: 15px;
-            }
-            
-            .zoom-controls {
-                top: 5px;
-                right: 5px;
-            }
-            
-            .zoom-btn {
-                width: 35px;
-                height: 35px;
-                font-size: 16px;
-            }
+            body { padding: 5px; }
+            .container { padding: 15px; border-radius: 15px; }
+            .map-container { margin-bottom: 20px; }
+            #map { min-height: 300px; }
+            .legend { gap: 15px; margin: 20px 0; }
+            .stats { gap: 10px; margin-top: 20px; }
+            .stat-card { padding: 15px; }
+            .zoom-controls { top: 5px; right: 5px; }
+            .zoom-btn { width: 35px; height: 35px; font-size: 16px; }
         }
         
         @media (max-width: 480px) {
-            .legend-scale {
-                width: 100%;
-            }
-            
-            .legend-gradient,
-            .legend-labels {
-                width: 100%;
-                max-width: 280px;
-            }
-            
-            .stats {
-                grid-template-columns: 1fr;
-            }
+            .legend-scale { width: 100%; }
+            .legend-gradient, .legend-labels { width: 100%; max-width: 280px; }
+            .stats { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Потребление сахара в Европе</h1>
-        <p class="subtitle">Среднее потребление сахара на человека в день (граммы)</p>
+        <h1 id="main-title"></h1>
+        <p class="subtitle" id="subtitle"></p>
         
         <div class="map-container">
             <div id="loading" class="loading">Загрузка карты...</div>
@@ -355,34 +313,28 @@
         
         <div class="legend">
             <div class="legend-scale">
-                <div class="legend-title">Потребление сахара:</div>
+                <div class="legend-title" id="legend-title"></div>
                 <div class="legend-gradient"></div>
-                <div class="legend-labels">
-                    <span>Низкое<br>(70г)</span>
-                    <span>Умеренное<br>(85г)</span>
-                    <span>Среднее<br>(95г)</span>
-                    <span>Высокое<br>(105г)</span>
-                    <span>Очень высокое<br>(115г+)</span>
-                </div>
+                <div class="legend-labels" id="legend-labels"></div>
             </div>
         </div>
         
         <div class="stats">
             <div class="stat-card">
-                <div class="stat-value" id="avgSugar">-</div>
-                <div class="stat-label">Среднее потребление в Европе (г/день)</div>
+                <div class="stat-value" id="avg-value">-</div>
+                <div class="stat-label" id="avg-label"></div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="maxCountry">-</div>
-                <div class="stat-label">Страна с наибольшим потреблением</div>
+                <div class="stat-value" id="max-country">-</div>
+                <div class="stat-label" id="max-label"></div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="minCountry">-</div>
-                <div class="stat-label">Страна с наименьшим потреблением</div>
+                <div class="stat-value" id="min-country">-</div>
+                <div class="stat-label" id="min-label"></div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="totalCountries">-</div>
-                <div class="stat-label">Количество стран на карте</div>
+                <div class="stat-value" id="total-countries">-</div>
+                <div class="stat-label" id="total-label"></div>
             </div>
         </div>
     </div>
@@ -390,92 +342,21 @@
     <div class="tooltip" id="tooltip"></div>
 
     <script>
-        const sugarData = {
-            'Germany': 95,
-            'France': 88,
-            'Spain': 78,
-            'Italy': 82,
-            'United Kingdom': 102,
-            'Poland': 91,
-            'Netherlands': 112,
-            'Belgium': 108,
-            'Switzerland': 85,
-            'Austria': 93,
-            'Czech Republic': 87,
-            'Slovakia': 89,
-            'Hungary': 94,
-            'Romania': 86,
-            'Bulgaria': 79,
-            'Greece': 74,
-            'Portugal': 81,
-            'Sweden': 76,
-            'Norway': 83,
-            'Finland': 77,
-            'Denmark': 99,
-            'Ireland': 96,
-            'Lithuania': 84,
-            'Latvia': 88,
-            'Estonia': 90,
-            'Slovenia': 92,
-            'Croatia': 80,
-            'Serbia': 85,
-            'Montenegro': 83,
-            'Bosnia and Herzegovina': 81,
-            'North Macedonia': 78,
-            'Albania': 75,
-            'Moldova': 82,
-            'Ukraine': 87,
-            'Belarus': 89
-        };
-
-        const russianNames = {
-            'Germany': 'Германия',
-            'France': 'Франция',
-            'Spain': 'Испания',
-            'Italy': 'Италия',
-            'United Kingdom': 'Великобритания',
-            'Poland': 'Польша',
-            'Netherlands': 'Нидерланды',
-            'Belgium': 'Бельгия',
-            'Switzerland': 'Швейцария',
-            'Austria': 'Австрия',
-            'Czech Republic': 'Чехия',
-            'Slovakia': 'Словакия',
-            'Hungary': 'Венгрия',
-            'Romania': 'Румыния',
-            'Bulgaria': 'Болгария',
-            'Greece': 'Греция',
-            'Portugal': 'Португалия',
-            'Sweden': 'Швеция',
-            'Norway': 'Норвегия',
-            'Finland': 'Финляндия',
-            'Denmark': 'Дания',
-            'Ireland': 'Ирландия',
-            'Lithuania': 'Литва',
-            'Latvia': 'Латвия',
-            'Estonia': 'Эстония',
-            'Slovenia': 'Словения',
-            'Croatia': 'Хорватия',
-            'Serbia': 'Сербия',
-            'Montenegro': 'Черногория',
-            'Bosnia and Herzegovina': 'Босния и Герцеговина',
-            'North Macedonia': 'Северная Македония',
-            'Albania': 'Албания',
-            'Moldova': 'Молдова',
-            'Ukraine': 'Украина',
-            'Belarus': 'Беларусь'
-        };
-
         let currentTransform = d3.zoomIdentity;
         let svg, g, projection, path, tooltip, zoom;
+        let configData = {}; // To store loaded data from JSON
 
-        function getSugarColor(sugar) {
-            if (!sugar) return '#e2e8f0';
+        // Function to get color based on value
+        function getValueColor(value) {
+            if (value === undefined || value === null) return '#e2e8f0';
             
-            const minSugar = 70;
-            const maxSugar = 115;
-            const normalized = Math.max(0, Math.min(1, (sugar - minSugar) / (maxSugar - minSugar)));
+            const values = Object.values(configData.data);
+            const minVal = Math.min(...values);
+            const maxVal = Math.max(...values);
             
+            const normalized = Math.max(0, Math.min(1, (value - minVal) / (maxVal - minVal)));
+            
+            // This color scale is generic now
             if (normalized <= 0.25) {
                 const factor = normalized * 4;
                 const r = Math.round(16 + (52 - 16) * factor);
@@ -503,70 +384,79 @@
             }
         }
 
-        function getSugarCategory(sugar) {
-            if (sugar >= 105) return 'очень высокое';
-            if (sugar >= 95) return 'высокое';
-            if (sugar >= 85) return 'умеренное';
-            if (sugar >= 75) return 'низкое';
-            return 'очень низкое';
+        // Generic category function
+        function getValueCategory(value) {
+            const values = Object.values(configData.data);
+            const maxVal = Math.max(...values);
+            const minVal = Math.min(...values);
+            const range = maxVal - minVal;
+
+            if (value >= minVal + range * 0.8) return configData.categories[4] || 'очень высокое';
+            if (value >= minVal + range * 0.6) return configData.categories[3] || 'высокое';
+            if (value >= minVal + range * 0.4) return configData.categories[2] || 'умеренное';
+            if (value >= minVal + range * 0.2) return configData.categories[1] || 'низкое';
+            return configData.categories[0] || 'очень низкое';
         }
 
         function setupZoom() {
             zoom = d3.zoom()
                 .scaleExtent([0.5, 8])
-                .on('zoom', function(event) {
+                .on('zoom', (event) => {
                     currentTransform = event.transform;
                     g.attr('transform', event.transform);
                 });
 
             svg.call(zoom);
 
-            // Zoom controls
-            d3.select('#zoom-in').on('click', function() {
-                svg.transition().duration(300).call(
-                    zoom.scaleBy, 1.5
-                );
-            });
-
-            d3.select('#zoom-out').on('click', function() {
-                svg.transition().duration(300).call(
-                    zoom.scaleBy, 1 / 1.5
-                );
-            });
-
-            d3.select('#zoom-reset').on('click', function() {
-                svg.transition().duration(500).call(
-                    zoom.transform,
-                    d3.zoomIdentity
-                );
-            });
+            d3.select('#zoom-in').on('click', () => svg.transition().duration(300).call(zoom.scaleBy, 1.5));
+            d3.select('#zoom-out').on('click', () => svg.transition().duration(300).call(zoom.scaleBy, 1 / 1.5));
+            d3.select('#zoom-reset').on('click', () => svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity));
         }
 
         function setupTouch() {
-            // Prevent default touch behaviors that interfere with zoom
-            svg.node().addEventListener('touchstart', function(e) {
-                e.preventDefault();
+            ['touchstart', 'touchmove', 'touchend'].forEach(eventType => {
+                svg.node().addEventListener(eventType, e => e.preventDefault());
+            });
+        }
+        
+        // Function to populate UI text from loaded data
+        function populateUI() {
+            document.title = configData.pageTitle;
+            document.getElementById('main-title').textContent = configData.header;
+            document.getElementById('subtitle').textContent = configData.subtitle;
+            document.getElementById('legend-title').textContent = configData.legend.title;
+            
+            const legendLabelsContainer = document.getElementById('legend-labels');
+            legendLabelsContainer.innerHTML = '';
+            configData.legend.labels.forEach(label => {
+                const span = document.createElement('span');
+                span.innerHTML = label;
+                legendLabelsContainer.appendChild(span);
             });
 
-            svg.node().addEventListener('touchmove', function(e) {
-                e.preventDefault();
-            });
-
-            svg.node().addEventListener('touchend', function(e) {
-                e.preventDefault();
-            });
+            document.getElementById('avg-label').textContent = configData.stats.avgLabel;
+            document.getElementById('max-label').textContent = configData.stats.maxLabel;
+            document.getElementById('min-label').textContent = configData.stats.minLabel;
+            document.getElementById('total-label').textContent = configData.stats.totalLabel;
         }
 
         async function loadAndRenderMap() {
             try {
-                const response = await fetch('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson');
-                const world = await response.json();
+                // Load configuration data first
+                const dataResponse = await fetch('data.txt');
+                configData = await dataResponse.json();
+                
+                // Populate UI text elements
+                populateUI();
+
+                // Then load map geometry
+                const geoResponse = await fetch('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson');
+                const world = await geoResponse.json();
                 
                 svg = d3.select("#map");
                 const width = 1000;
                 const height = 700;
                 
-                // Создаем проекцию для Европы
                 projection = d3.geoMercator()
                     .center([20, 55])
                     .scale(800)
@@ -574,17 +464,13 @@
                 
                 path = d3.geoPath().projection(projection);
                 tooltip = d3.select("#tooltip");
-                
-                // Создаем группу для зумируемого контента
                 g = svg.append('g');
                 
-                // Фильтруем только европейские страны
                 const europeanCountries = world.features.filter(d => {
                     const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
-                    return sugarData[name] !== undefined;
+                    return configData.data[name] !== undefined;
                 });
                 
-                // Рисуем страны
                 g.selectAll(".country")
                     .data(europeanCountries)
                     .enter()
@@ -593,19 +479,19 @@
                     .attr("d", path)
                     .style("fill", d => {
                         const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
-                        return getSugarColor(sugarData[name]);
+                        return getValueColor(configData.data[name]);
                     })
                     .on("mouseover", function(event, d) {
                         const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
-                        const russianName = russianNames[name] || name;
-                        const sugar = sugarData[name];
+                        const displayName = configData.countryNames[name] || name;
+                        const value = configData.data[name];
                         
-                        if (sugar) {
+                        if (value !== undefined) {
                             tooltip.html(`
-                                <strong>${russianName}</strong><br>
-                                Потребление сахара: <strong>${sugar}г/день</strong><br>
-                                Категория: ${getSugarCategory(sugar)}<br>
-                                <small style="opacity: 0.8;">Данные приблизительные</small>
+                                <strong>${displayName}</strong><br>
+                                ${configData.tooltip.valueLabel}: <strong>${value}${configData.tooltip.valueSuffix}</strong><br>
+                                ${configData.tooltip.categoryLabel}: ${getValueCategory(value)}<br>
+                                <small style="opacity: 0.8;">${configData.tooltip.note}</small>
                             `)
                             .classed("show", true);
                         }
@@ -616,114 +502,39 @@
                             .style("left", Math.min(x + 15, window.innerWidth - 260) + "px")
                             .style("top", Math.max(y - 15, 10) + "px");
                     })
-                    .on("mouseout", function() {
-                        tooltip.classed("show", false);
-                    })
-                    .on("click", function(event, d) {
-                        const name = d.properties.name || d.properties.NAME || d.properties.NAME_EN;
-                        const russianName = russianNames[name] || name;
-                        const sugar = sugarData[name];
-                        
-                        if (sugar) {
-                            const category = getSugarCategory(sugar);
-                            const comparison = sugar > 89 ? 'выше' : sugar < 89 ? 'ниже' : 'равно';
-                            alert(`🍯 ${russianName}\n\n` +
-                                  `📊 Потребление сахара: ${sugar}г/день\n` +
-                                  `📈 Категория: ${category} потребление\n` +
-                                  `🌍 ${comparison} среднего по Европе (89г)`);
-                        }
-                    });
+                    .on("mouseout", () => tooltip.classed("show", false));
                 
-                // Настройка зума и тач-событий
                 setupZoom();
                 setupTouch();
                 
-                // Скрываем индикатор загрузки
                 document.getElementById('loading').style.display = 'none';
                 
                 calculateStats();
                 
             } catch (error) {
-                console.error('Ошибка загрузки карты:', error);
-                document.getElementById('loading').innerHTML = 'Ошибка загрузки карты. Показана упрощенная версия.';
-                
-                // Fallback к упрощенной карте
-                createSimpleMap();
+                console.error('Ошибка загрузки данных или карты:', error);
+                document.getElementById('loading').innerHTML = 'Ошибка загрузки данных. Пожалуйста, проверьте файл data.txt и ваше интернет-соединение.';
             }
         }
 
-        function createSimpleMap() {
-            // Простая версия карты в случае ошибки загрузки GeoJSON
-            svg = d3.select("#map");
-            g = svg.append('g');
-            const countries = Object.keys(sugarData);
-            
-            const cols = Math.ceil(Math.sqrt(countries.length));
-            const cellWidth = 1000 / cols;
-            const cellHeight = 700 / Math.ceil(countries.length / cols);
-            
-            countries.forEach((country, index) => {
-                const col = index % cols;
-                const row = Math.floor(index / cols);
-                const x = col * cellWidth + 10;
-                const y = row * cellHeight + 10;
-                const width = cellWidth - 20;
-                const height = cellHeight - 30;
-                
-                g.append("rect")
-                    .attr("x", x)
-                    .attr("y", y)
-                    .attr("width", width)
-                    .attr("height", height)
-                    .attr("class", "country")
-                    .style("fill", getSugarColor(sugarData[country]))
-                    .style("stroke", "#fff")
-                    .style("stroke-width", 1)
-                    .style("cursor", "pointer")
-                    .on("click", () => {
-                        const russianName = russianNames[country] || country;
-                        alert(`${russianName}: ${sugarData[country]}г/день`);
-                    });
-                
-                g.append("text")
-                    .attr("x", x + width/2)
-                    .attr("y", y + height/2)
-                    .attr("text-anchor", "middle")
-                    .attr("dominant-baseline", "middle")
-                    .style("font-size", Math.min(width/8, height/4) + "px")
-                    .style("fill", "#333")
-                    .style("pointer-events", "none")
-                    .text(russianNames[country] || country);
-            });
-            
-            setupZoom();
-            setupTouch();
-            calculateStats();
-        }
-
         function calculateStats() {
-            const values = Object.values(sugarData);
+            const values = Object.values(configData.data);
             const avg = Math.round(values.reduce((a, b) => a + b) / values.length);
             
             const maxValue = Math.max(...values);
             const minValue = Math.min(...values);
             
-            const maxCountry = Object.keys(sugarData).find(key => sugarData[key] === maxValue);
-            const minCountry = Object.keys(sugarData).find(key => sugarData[key] === minValue);
+            const maxCountryName = Object.keys(configData.data).find(key => configData.data[key] === maxValue);
+            const minCountryName = Object.keys(configData.data).find(key => configData.data[key] === minValue);
             
-            document.getElementById('avgSugar').textContent = avg;
-            document.getElementById('maxCountry').textContent = russianNames[maxCountry] || maxCountry;
-            document.getElementById('minCountry').textContent = russianNames[minCountry] || minCountry;
-            document.getElementById('totalCountries').textContent = Object.keys(sugarData).length;
+            document.getElementById('avg-value').textContent = avg;
+            document.getElementById('max-country').textContent = configData.countryNames[maxCountryName] || maxCountryName;
+            document.getElementById('min-country').textContent = configData.countryNames[minCountryName] || minCountryName;
+            document.getElementById('total-countries').textContent = Object.keys(configData.data).length;
         }
 
-        // Загружаем карту при загрузке страницы
         document.addEventListener('DOMContentLoaded', loadAndRenderMap);
 
-        // Обновляем размеры при изменении окна
-        window.addEventListener('resize', function() {
-            // SVG автоматически масштабируется благодаря viewBox и preserveAspectRatio
-        });
     </script>
 </body>
 </html>
